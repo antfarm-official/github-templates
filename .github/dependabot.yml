@@ -3,7 +3,10 @@ updates:
   # Keep the third-party actions pinned inside this repo's composite actions and reusable
   # workflows up to date. Dependabot opens bump PRs (preserving SHA pins) when new versions ship.
   - package-ecosystem: "github-actions"
-    directory: "/"
+    # "/" covers only .github/workflows; the composite actions live in steps/*.
+    directories:
+      - "/"
+      - "/steps/*"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 10
