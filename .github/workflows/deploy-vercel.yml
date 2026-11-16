@@ -478,10 +478,12 @@ jobs:
           fi
           scope_args=()
           if [ "$VERCEL_PROJECT_TOKEN" != "true" ]; then scope_args=(--scope "$VERCEL_SCOPE"); fi
-          # `vercel deploy` writes progress to stderr and the URL to stdout — take the last line so
-          # an extra line can never turn the output into a malformed multi-line entry, and stop
-          # here if there is no URL at all rather than aliasing an empty one below.
-          URL="$(pnpm vercel deploy --prebuilt $PROD_ARG $SKIP_DOMAIN ${runtime_args[@]+"${runtime_args[@]}"} --yes --token="$VERCEL_TOKEN" ${scope_args[@]+"${scope_args[@]}"} | tail -n 1)"
+          # `vercel deploy` writes progress to stderr and the URL to stdout, but other lines land on
+          # stdout too (build-utils logs "Error while parsing config file" right after the URL when it
+          # cannot read a multi-document pnpm-lock.yaml), so take the last *.vercel.app URL, and stop
+          # here if there is none rather than aliasing an empty one below.
+          OUTPUT="$(pnpm vercel deploy --prebuilt $PROD_ARG $SKIP_DOMAIN ${runtime_args[@]+"${runtime_args[@]}"} --yes --token="$VERCEL_TOKEN" ${scope_args[@]+"${scope_args[@]}"})"
+          URL="$(grep -oE 'https://[a-z0-9-]+\.vercel\.app' <<<"$OUTPUT" | tail -n 1 || true)"
           if [ -z "$URL" ]; then
             echo "::error::vercel deploy printed no deployment URL" >&2
             exit 1
