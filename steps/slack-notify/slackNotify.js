@@ -22,35 +22,48 @@ const markdownToMrkdwn = (text) => {
     );
 };
 
-// chat.update rejects `text` over 4,000 characters (`msg_too_long`), and a long
-// release changelog gets there. The body is cut at the last line break that fits,
-// so no mrkdwn link is split, and the cut is marked — with a link to the full text
-// (the PR, the GitHub release) when the caller passes one. A short closing
-// paragraph survives the cut: release flags such as the DB-migration warning live
-// there.
-const MAX_TEXT_LENGTH = 4000;
-const MAX_KEPT_TAIL_LENGTH = 500;
+// chat.update rejects `text` over 4,000 UTF-8 bytes (`msg_too_long`), not
+// characters: a changelog of `•` bullets (3 bytes each) fails well under 4,000
+// characters. The body is cut at the last line break that fits, so no mrkdwn
+// link is split, and the cut is marked — with a link to the full text (the PR,
+// the GitHub release) when the caller passes one. A short closing paragraph
+// survives the cut: release flags such as the DB-migration warning live there.
+const MAX_TEXT_BYTES = 4000;
+const MAX_KEPT_TAIL_BYTES = 500;
 const TRUNCATION_MARK = '\n… (truncated)';
+
+const byteLength = (text) => Buffer.byteLength(text, 'utf8');
+
+// The longest prefix of `text` within `bytes` UTF-8 bytes, without a split code point.
+const fitBytes = (text, bytes) => {
+    let prefix = Buffer.from(text, 'utf8')
+        .subarray(0, Math.max(bytes, 0))
+        .toString('utf8');
+    while (!text.startsWith(prefix)) {
+        prefix = prefix.slice(0, -1);
+    }
+    return prefix;
+};
 
 const truncationMark = (cutLink) =>
     cutLink ? `\n… the rest is in ${cutLink}` : TRUNCATION_MARK;
 
-const truncateText = (text, limit = MAX_TEXT_LENGTH, mark = TRUNCATION_MARK) => {
-    if (text.length <= limit) {
+const truncateText = (text, limit = MAX_TEXT_BYTES, mark = TRUNCATION_MARK) => {
+    if (byteLength(text) <= limit) {
         return text;
     }
     const trimmed = text.trimEnd();
-    if (trimmed.length <= limit) {
+    if (byteLength(trimmed) <= limit) {
         return trimmed;
     }
     const tailStart = trimmed.lastIndexOf('\n\n');
     const tail =
-        tailStart > 0 && trimmed.length - tailStart <= MAX_KEPT_TAIL_LENGTH
+        tailStart > 0 && byteLength(trimmed.slice(tailStart)) <= MAX_KEPT_TAIL_BYTES
             ? trimmed.slice(tailStart)
             : '';
-    const room = limit - mark.length - tail.length;
-    const lineEnd = trimmed.lastIndexOf('\n', room);
-    return `${trimmed.slice(0, lineEnd > 0 ? lineEnd : room)}${mark}${tail}`;
+    const head = fitBytes(trimmed, limit - byteLength(mark) - byteLength(tail));
+    const lineEnd = trimmed.lastIndexOf('\n', head.length);
+    return `${lineEnd > 0 ? trimmed.slice(0, lineEnd) : head}${mark}${tail}`;
 };
 
 // Sanitize untrusted values before logging to avoid log-forging/control chars.
@@ -144,10 +157,10 @@ if (require.main === module) {
 
     const text = markdownToMrkdwn(message);
     const cutLink = markdownToMrkdwn(process.env.SLACK_CUT_LINK || '').trim();
-    const fittedText = truncateText(text, MAX_TEXT_LENGTH, truncationMark(cutLink));
-    if (fittedText.length < text.trimEnd().length) {
+    const fittedText = truncateText(text, MAX_TEXT_BYTES, truncationMark(cutLink));
+    if (byteLength(fittedText) < byteLength(text.trimEnd())) {
         console.log(
-            `::warning::Slack message truncated from ${text.length} to ${fittedText.length} characters.`,
+            `::warning::Slack message truncated from ${byteLength(text)} to ${byteLength(fittedText)} bytes.`,
         );
     }
 

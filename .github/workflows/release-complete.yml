@@ -98,6 +98,15 @@ jobs:
 
             ${{ steps.thread.outputs.body }}
 
+      # The Linear CLI refuses to run outside a git work tree and sends the HEAD commit along.
+      - name: Checkout the tag
+        if: inputs.op-linear-pipeline-key-path != ''
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ inputs.tag }}
+          fetch-depth: 1
+          persist-credentials: false
+
       - name: Linear — complete the release
         if: inputs.op-linear-pipeline-key-path != ''
         uses: aragon/github-templates/steps/linear-release@v1
