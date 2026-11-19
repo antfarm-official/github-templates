@@ -98,14 +98,22 @@ jobs:
 
             ${{ steps.thread.outputs.body }}
 
-      # The Linear CLI refuses to run outside a git work tree and sends the HEAD commit along.
-      - name: Checkout the tag
+      # The Linear CLI refuses to run outside a git work tree and sends the HEAD commit along; it
+      # reads no files, so only the tag's commit object is fetched (no trees, no blobs).
+      - name: Point HEAD at the tag's commit
         if: inputs.op-linear-pipeline-key-path != ''
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: refs/tags/${{ inputs.tag }}
-          fetch-depth: 1
-          persist-credentials: false
+        env:
+          TOKEN: ${{ fromJSON(steps.op.outputs.secrets).RELEASE_TOKEN || github.token }}
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}.git
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          git init -q
+          AUTH="$(printf 'x-access-token:%s' "$TOKEN" | base64 | tr -d '\n')"
+          echo "::add-mask::$AUTH"
+          GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=http.extraheader GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $AUTH" \
+            git fetch -q --depth=1 --filter=tree:0 "$REPO_URL" "refs/tags/$TAG"
+          git update-ref --no-deref HEAD "$(git rev-parse 'FETCH_HEAD^{commit}')"
 
       - name: Linear — complete the release
         if: inputs.op-linear-pipeline-key-path != ''
