@@ -90,6 +90,12 @@ jobs:
           LABEL="$(printf '%s' "$TITLE" | sed -nE 's#^Release ([A-Za-z0-9@._/-]+)$#\1#p')"
           echo "label=$LABEL" >> "$GITHUB_OUTPUT"
 
+      # The Linear CLI refuses to run outside a git work tree; `update` reads nothing from it, and
+      # the merge ref of a closed PR may be gone, so an empty repository is enough.
+      - name: Prepare a git work tree for Linear
+        if: ${{ steps.label.outputs.label != '' && inputs.op-linear-pipeline-key-path != '' }}
+        run: git init -q
+
       - name: Linear — move the release to canceled
         if: ${{ steps.label.outputs.label != '' && inputs.op-linear-pipeline-key-path != '' }}
         uses: aragon/github-templates/steps/linear-release@v1
