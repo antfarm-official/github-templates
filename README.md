@@ -1,23 +1,13 @@
 # github-templates
 
-Shared, loadable CI/release modules used across Aragon repos. One place to standardise releases,
+Shared, loadable CI/release modules used across Antfarm repos. One place to standardise releases,
 centralise secret handling, restrict access to sensitive tokens (e.g. Vercel), and patch quickly.
-
-> **Design:** [`docs/release-design.md`](docs/release-design.md) — scenarios, the
-> Build→Test→Release→Deploy spine, the module catalog, the Slack ceremony and the
-> security/credential model.
-> **Examples:** [`examples/`](examples/) — copy-paste caller workflows per scenario.
 
 ## What's here
 
 - **`steps/`** — composite actions (step-level building blocks).
 - **`.github/workflows/`** — reusable workflows (`workflow_call`, job-level).
 - **`lib/`** — shared helpers used by the action scripts (unit-tested; zero runtime dependencies).
-
-Every release/deploy module works for a **single-package repo with the defaults** and for a
-**pnpm monorepo via inputs** (`package-dir`, `tag-prefix`, `scope`, `workspace`, …) — see
-[`docs/release-design.md §3`](docs/release-design.md) seam 3 and
-[`examples/release-changesets-monorepo.yml`](examples/release-changesets-monorepo.yml).
 
 The philosophy: the templates hold what every repo does the same way — the release PR lifecycle,
 the deploy transports, the Slack thread every release lives in, the Linear mirror — and each repo
@@ -70,15 +60,13 @@ thread (or the channel) with a link to the run.
 ```yaml
 jobs:
   release:
-    uses: aragon/github-templates/.github/workflows/release-start.yml@v1
+    uses: antfarm-official/github-templates/.github/workflows/release-start.yml@v1
     with:
       engine: changesets
       op-release-token-path: op://kv_app_infra/ARABOT_PAT/credential
     secrets:
       OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
 ```
-
-See [`examples/`](examples/) for the full lifecycle per scenario.
 
 ## Security contract (every module)
 
@@ -103,13 +91,6 @@ major tag (see `docs/release-design.md` §7), so a `v1` consumer never runs `v2`
 every self-reference on one major. CodeQL flags the moving tag as `actions/unpinned-tag`; the
 alerts are dismissed with this rationale.
 
-`@main` is only the bootstrap right after a migration, while the modules settle.
-
-`credential-retrieval` gained an additive `mode: byref` (named `op://` references, JSON output) that
-every reusable workflow now uses instead of calling `1password/load-secrets-action` directly — see
-[`docs/release-design.md §4`](docs/release-design.md#4-credential-model). Existing `alltoenv` /
-`alltofile` behavior for consumers pinned to an older SHA is unchanged.
-
 ## Developing
 
 - `node --test 'lib/*.test.js' 'steps/**/*.test.js'` runs the unit tests for the action scripts
@@ -125,5 +106,5 @@ every reusable workflow now uses instead of calling `1password/load-secrets-acti
   or GitHub skips it even though its parent succeeded. `steps/workflow-guards` checks this; CI
   runs it over this repo's workflows and examples, consumers run it over theirs.
 - Inside a **reusable workflow**, reference composite actions by their **fully-qualified** path
-  (`aragon/github-templates/steps/foo@<ref>`) — a relative `./steps/foo` would resolve against the
+  (`Antfarm/github-templates/steps/foo@<ref>`) — a relative `./steps/foo` would resolve against the
   caller repo. In-repo workflows (like `_selftest`/`release-self`) may use `./steps/foo`.
